@@ -1,0 +1,16 @@
+id: test-39-dsl-len
+info:
+  name: DSL len on Body and Header Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/dsl-len"
+    matchers-condition: and
+    matchers:
+      - type: dsl
+        dsl:
+          - 'len(body) > 0'
+          - 'len(body) < 100'
+          - 'len(header) > 0'
+        condition: and

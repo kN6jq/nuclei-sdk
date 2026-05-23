@@ -1,0 +1,22 @@
+id: test-40-raw-body-var
+info:
+  name: Raw Request Body with Variable Test
+  severity: info
+variables:
+  payload: "test_data_123"
+http:
+  - raw:
+      - |
+        POST /test/raw-echo HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: text/plain
+
+        injected-{{payload}}
+    matchers-condition: and
+    matchers:
+      - type: word
+        words:
+          - "injected-test_data_123"
+      - type: status
+        status:
+          - 200

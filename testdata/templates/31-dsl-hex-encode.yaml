@@ -1,0 +1,14 @@
+id: test-31-dsl-hex-encode
+info:
+  name: DSL hex_encode Variable Function Test
+  severity: info
+variables:
+  raw_val: "ABC"
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/dsl-hex-encode?val={{raw_val}}&check={{hex_encode(raw_val)}}"
+    matchers:
+      - type: word
+        words:
+          - "hex_encode_match"

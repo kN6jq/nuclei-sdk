@@ -1,0 +1,19 @@
+id: test-35-part-all
+info:
+  name: Part All Matcher Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/part-all"
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: all
+        condition: and
+        words:
+          - "part-all-body-content"
+          - "part-all-header-value"
+      - type: status
+        status:
+          - 200

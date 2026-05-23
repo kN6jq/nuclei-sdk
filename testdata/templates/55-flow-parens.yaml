@@ -1,0 +1,27 @@
+id: test-55-flow-parens
+info:
+  name: Flow Parenthesized Grouping Test
+  severity: info
+flow: (http(1) && http(2)) || http(3)
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/flow-or?step=1"
+    matchers:
+      - type: word
+        words:
+          - "will-not-match"
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/flow-or?step=2"
+    matchers:
+      - type: word
+        words:
+          - "or-pass"
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/flow-three-a"
+    matchers:
+      - type: word
+        words:
+          - "step-a-pass"

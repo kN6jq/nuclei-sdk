@@ -1,0 +1,14 @@
+id: test-30-dsl-url-encode
+info:
+  name: DSL url_encode Variable Function Test
+  severity: info
+variables:
+  raw_val: "hello world"
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/dsl-url-encode?val={{url_encode(raw_val)}}&check={{url_encode(raw_val)}}"
+    matchers:
+      - type: word
+        words:
+          - "url_encode_match"

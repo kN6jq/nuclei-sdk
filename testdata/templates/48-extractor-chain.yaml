@@ -1,0 +1,29 @@
+id: test-48-extractor-chain
+info:
+  name: Extractor Chain Dynamic Value Test
+  severity: info
+http:
+  - raw:
+      - |
+        GET /test/extractor-chain-step1 HTTP/1.1
+        Host: {{Hostname}}
+
+      - |
+        GET /test/extractor-chain-step2?token={{secret}} HTTP/1.1
+        Host: {{Hostname}}
+
+    extractors:
+      - type: regex
+        name: secret
+        part: body
+        group: 1
+        regex:
+          - "secret_token: ([A-Z0-9_]+)"
+    matchers-condition: and
+    matchers:
+      - type: word
+        words:
+          - "chain-pass"
+      - type: status
+        status:
+          - 200

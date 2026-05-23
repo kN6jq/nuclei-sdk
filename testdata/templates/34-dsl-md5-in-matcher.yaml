@@ -1,0 +1,16 @@
+id: test-34-dsl-md5-in-matcher
+info:
+  name: DSL md5 Function in Matcher Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/dsl-md5-body"
+    matchers-condition: and
+    matchers:
+      - type: dsl
+        dsl:
+          - 'len(md5(body)) == 32'
+      - type: status
+        status:
+          - 200

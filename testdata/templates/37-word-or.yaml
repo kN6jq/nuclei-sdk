@@ -1,0 +1,15 @@
+id: test-37-word-or
+info:
+  name: Word Matcher OR Condition Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/word-or"
+    matchers:
+      - type: word
+        condition: or
+        words:
+          - "orange"
+          - "banana"
+          - "grape"

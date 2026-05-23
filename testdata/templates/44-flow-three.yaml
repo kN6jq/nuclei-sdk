@@ -1,0 +1,29 @@
+id: test-44-flow-three
+info:
+  name: Flow Three Requests AND Chain Test
+  severity: info
+flow: http(1) && http(2) && http(3)
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/flow-three-a"
+    matchers:
+      - type: word
+        words:
+          - "step-a-pass"
+        internal: true
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/flow-three-b"
+    matchers:
+      - type: word
+        words:
+          - "step-b-pass"
+        internal: true
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/flow-three-c"
+    matchers:
+      - type: word
+        words:
+          - "step-c-pass"

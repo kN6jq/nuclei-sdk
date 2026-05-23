@@ -1,0 +1,13 @@
+id: test-43-regex-or
+info:
+  name: Regex Matcher OR with Multiple Patterns Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/regex-or"
+    matchers:
+      - type: regex
+        regex:
+          - "build-\\d{4}"
+          - "v\\d+\\.\\d+\\.\\d+"

@@ -97,6 +97,12 @@ func executeRequestBlock(req *Request, target string, vars map[string]string) (*
 	if len(req.Raw) > 0 {
 		// Raw request mode
 		for i, raw := range req.Raw {
+			// Inject dynamic values from previous extractors into vars
+			for k, v := range dynamicValues {
+				if len(v) > 0 {
+					vars[k] = v[0]
+				}
+			}
 			raw = Substitute(raw, vars)
 			method, rawPath, headers, body, timeoutOverride, err := parseRawRequest(raw, target)
 			if err != nil {

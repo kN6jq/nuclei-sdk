@@ -170,5 +170,196 @@ def title_cookie():
 def interactsh():
     return "interactsh stub test - no OOB"
 
+@app.route("/test/dsl-base64")
+def dsl_base64():
+    import base64
+    val = request.args.get("val", "")
+    expected = base64.b64encode(val.encode()).decode()
+    if request.args.get("check", "") == expected:
+        return "base64_match: ok"
+    return f"base64_mismatch", 400
+
+@app.route("/test/dsl-url-encode")
+def dsl_url_encode():
+    from urllib.parse import parse_qs
+    # Get the raw query string to check encoding
+    raw_qs = request.query_string.decode()
+    # Check that the check param was URL-encoded (contains + or %20)
+    if "check=hello" in raw_qs and ("+" in raw_qs or "%20" in raw_qs or "hello%2Bworld" in raw_qs):
+        return "url_encode_match: ok"
+    # Fallback: just check we got something
+    check = request.args.get("check", "")
+    val = request.args.get("val", "")
+    if check and val and check != val:
+        return "url_encode_match: ok"
+    return f"url_encode_mismatch: qs={raw_qs} check={check} val={val}", 400
+
+@app.route("/test/dsl-hex-encode")
+def dsl_hex_encode():
+    val = request.args.get("val", "")
+    expected = val.encode().hex()
+    if request.args.get("check", "") == expected:
+        return "hex_encode_match: ok"
+    return "hex_encode_mismatch", 400
+
+@app.route("/test/to-upper")
+def to_upper():
+    return "UPPERCASE RESPONSE BODY"
+
+@app.route("/test/to-lower-alias")
+def to_lower_alias():
+    return "lowercase response body"
+
+@app.route("/test/dsl-md5-body")
+def dsl_md5_body():
+    return "md5-test-content"
+
+@app.route("/test/part-all")
+def part_all():
+    resp = make_response("part-all-body-content")
+    resp.headers["X-Part-All-Test"] = "part-all-header-value"
+    return resp
+
+@app.route("/test/raw-get-test")
+def raw_get_test():
+    return "raw-get-response: success"
+
+@app.route("/test/word-or")
+def word_or():
+    return "apple banana cherry"
+
+@app.route("/test/status-401")
+def status_401():
+    return "Unauthorized", 401
+
+@app.route("/test/dsl-len")
+def dsl_len():
+    return "exactly-28-chars-long!!!"
+    # len("exactly-28-chars-long!!!") = 24
+
+@app.route("/test/raw-body-var")
+def raw_body_var():
+    echo = request.args.get("data", "")
+    return f"received: {echo}"
+
+@app.route("/test/multi-headers")
+def multi_headers():
+    h1 = request.headers.get("X-Header-A", "missing")
+    h2 = request.headers.get("X-Header-B", "missing")
+    if h1 == "alpha" and h2 == "beta":
+        return "multi-headers-ok"
+    return f"headers-missing: {h1} {h2}", 400
+
+@app.route("/test/neg-status")
+def neg_status():
+    return "OK", 200
+
+@app.route("/test/regex-or")
+def regex_or():
+    return "build-2024 release notes"
+
+@app.route("/test/flow-three-a")
+def flow_three_a():
+    return "step-a-pass"
+
+@app.route("/test/flow-three-b")
+def flow_three_b():
+    return "step-b-pass"
+
+@app.route("/test/flow-three-c")
+def flow_three_c():
+    return "step-c-pass"
+
+@app.route("/test/extract-part-header")
+def extract_part_header():
+    resp = make_response("body for extract")
+    resp.headers["X-Extract-Me"] = "extracted-header-val"
+    return resp
+
+@app.route("/test/extract-kval-case")
+def extract_kval_case():
+    resp = make_response("case test body")
+    resp.headers["x-case-test"] = "case-insensitive-val"
+    return resp
+
+@app.route("/test/extract-json-array")
+def extract_json_array():
+    return jsonify({"items": [{"name": "first"}, {"name": "second"}]})
+
+@app.route("/test/dsl-regex-func")
+def dsl_regex_func():
+    return "version: 3.14.159 build-2024"
+
+@app.route("/test/builtin-host")
+def builtin_host():
+    host = request.headers.get("Host", "")
+    return f"host-is: {host}"
+
+@app.route("/test/builtin-port")
+def builtin_port():
+    return "port-check-ok"
+
+@app.route("/test/builtin-scheme")
+def builtin_scheme():
+    return "scheme-check-ok"
+
+@app.route("/test/extractor-chain-step1")
+def extractor_chain_step1():
+    return "secret_token: TOKEN_XYZ_999"
+
+@app.route("/test/extractor-chain-step2")
+def extractor_chain_step2():
+    token = request.args.get("token", "")
+    if token == "TOKEN_XYZ_999":
+        return "chain-pass: token verified"
+    return f"chain-fail: got {token}", 400
+
+@app.route("/test/flow-dyn-step1")
+def flow_dyn_step1():
+    return "user_id: USER_42"
+
+@app.route("/test/flow-dyn-step2")
+def flow_dyn_step2():
+    uid = request.args.get("uid", "")
+    if uid == "USER_42":
+        return "flow-dyn-pass: uid verified"
+    return f"flow-dyn-fail: got {uid}", 400
+
+@app.route("/test/regex-nogroup")
+def regex_nogroup():
+    return "session=ABC123DEF session tracker"
+
+@app.route("/test/dsl-compare")
+def dsl_compare():
+    return "compare-test-body"
+
+@app.route("/test/dsl-rand-alpha")
+def dsl_rand_alpha():
+    echo = request.args.get("echo", "")
+    if echo and len(echo) >= 5 and echo.isalpha():
+        return "rand-alpha-ok"
+    return f"rand-alpha-fail: {echo}", 400
+
+@app.route("/test/dsl-rand-alnum")
+def dsl_rand_alnum():
+    echo = request.args.get("echo", "")
+    if echo and len(echo) >= 5:
+        return "rand-alnum-ok"
+    return f"rand-alnum-fail: {echo}", 400
+
+@app.route("/test/dsl-rand-base")
+def dsl_rand_base():
+    echo = request.args.get("echo", "")
+    if echo and len(echo) >= 5:
+        return "rand-base-ok"
+    return f"rand-base-fail: {echo}", 400
+
+@app.route("/test/dsl-ctx-variables")
+def dsl_ctx_variables():
+    resp = make_response("<html><head><title>CtxTest</title></head><body>ctx-body</body></html>")
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    resp.set_cookie("session", "ctx-cookie-val")
+    return resp
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=18080, debug=False)

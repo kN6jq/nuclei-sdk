@@ -1,0 +1,19 @@
+id: test-41-multi-headers
+info:
+  name: Multiple Custom Headers Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/multi-headers"
+    headers:
+      X-Header-A: "alpha"
+      X-Header-B: "beta"
+    matchers-condition: and
+    matchers:
+      - type: word
+        words:
+          - "multi-headers-ok"
+      - type: status
+        status:
+          - 200

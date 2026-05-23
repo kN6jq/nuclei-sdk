@@ -1,0 +1,18 @@
+id: test-29-dsl-base64
+info:
+  name: DSL base64 Function Test
+  severity: info
+variables:
+  raw_val: "hello"
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/dsl-base64?val={{raw_val}}&check={{base64(raw_val)}}"
+    matchers-condition: and
+    matchers:
+      - type: word
+        words:
+          - "base64_match"
+      - type: status
+        status:
+          - 200

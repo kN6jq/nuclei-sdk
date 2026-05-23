@@ -2,11 +2,13 @@ package nuclei
 
 import (
 	"crypto/md5"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"net/url"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -51,29 +53,36 @@ func BuildVariableContext(targetURL string, tmplVars map[string]string, randStr 
 }
 
 // Substitute replaces all {{key}} patterns in the input string.
-// First pass: simple key replacement. Second pass: function calls like {{md5(val)}}.
+// Pass 1: function calls like {{md5(val)}}. Pass 2: key replacement. Pass 3: function calls again (for embedded funcs).
 func Substitute(input string, vars map[string]string) string {
-	// First pass: replace {{func(expr)}} patterns
-	result := funcPattern.ReplaceAllStringFunc(input, func(match string) string {
-		sub := funcPattern.FindStringSubmatch(match)
-		if len(sub) < 3 {
-			return match
-		}
-		fnName := sub[1]
-		fnArg := sub[2]
+	replaceFuncCalls := func(s string) string {
+		return funcPattern.ReplaceAllStringFunc(s, func(match string) string {
+			sub := funcPattern.FindStringSubmatch(match)
+			if len(sub) < 3 {
+				return match
+			}
+			fnName := sub[1]
+			fnArg := sub[2]
 
-		// Resolve variable references in arg
-		if val, ok := vars[fnArg]; ok {
-			fnArg = val
-		}
+			// Resolve variable references in arg
+			if val, ok := vars[fnArg]; ok {
+				fnArg = val
+			}
 
-		return callFunc(fnName, fnArg)
-	})
+			return callFunc(fnName, fnArg)
+		})
+	}
 
-	// Second pass: replace {{key}} patterns
+	// Pass 1: replace {{func(expr)}} patterns in input
+	result := replaceFuncCalls(input)
+
+	// Pass 2: replace {{key}} patterns
 	for key, val := range vars {
 		result = strings.ReplaceAll(result, "{{"+key+"}}", val)
 	}
+
+	// Pass 3: replace {{func(expr)}} patterns that appeared after key substitution
+	result = replaceFuncCalls(result)
 
 	return result
 }
@@ -99,7 +108,46 @@ func callFunc(name, arg string) string {
 		return strings.ToUpper(arg)
 	case "hex_encode":
 		return hex.EncodeToString([]byte(arg))
+	case "rand_text_alpha":
+		n := 8
+		if v, err := strconv.Atoi(arg); err == nil && v > 0 {
+			n = v
+		}
+		return randAlphaString(n)
+	case "rand_text_alphanumeric":
+		n := 8
+		if v, err := strconv.Atoi(arg); err == nil && v > 0 {
+			n = v
+		}
+		return randAlnumString(n)
+	case "rand_base":
+		n := 8
+		if v, err := strconv.Atoi(arg); err == nil && v > 0 {
+			n = v
+		}
+		return randAlnumString(n)
 	default:
 		return arg
 	}
+}
+
+const alphaBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+const alnumBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+func randAlphaString(n int) string {
+	b := make([]byte, n)
+	rand.Read(b)
+	for i := range b {
+		b[i] = alphaBytes[int(b[i])%len(alphaBytes)]
+	}
+	return string(b)
+}
+
+func randAlnumString(n int) string {
+	b := make([]byte, n)
+	rand.Read(b)
+	for i := range b {
+		b[i] = alnumBytes[int(b[i])%len(alnumBytes)]
+	}
+	return string(b)
 }

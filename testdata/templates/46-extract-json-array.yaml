@@ -1,0 +1,21 @@
+id: test-46-extract-json-array
+info:
+  name: JSON Extractor Array Indexing Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/extract-json-array"
+    extractors:
+      - type: json
+        name: first_item
+        json:
+          - ".items.0.name"
+    matchers-condition: and
+    matchers:
+      - type: word
+        words:
+          - "items"
+      - type: status
+        status:
+          - 200

@@ -1,0 +1,18 @@
+id: test-52-dsl-rand-alnum
+info:
+  name: DSL rand_text_alphanumeric Variable Function Test
+  severity: info
+variables:
+  rstr: "{{rand_text_alphanumeric(10)}}"
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/dsl-rand-alnum?echo={{rstr}}"
+    matchers-condition: and
+    matchers:
+      - type: word
+        words:
+          - "rand-alnum-ok"
+      - type: status
+        status:
+          - 200

@@ -1,0 +1,22 @@
+id: test-49-dsl-ctx-variables
+info:
+  name: DSL Context Variables Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/dsl-ctx-variables"
+    matchers-condition: and
+    matchers:
+      - type: dsl
+        dsl:
+          - 'contains(title, "CtxTest")'
+      - type: dsl
+        dsl:
+          - 'contains(content_type, "text/html")'
+      - type: dsl
+        dsl:
+          - 'contains(cookie, "session")'
+      - type: status
+        status:
+          - 200

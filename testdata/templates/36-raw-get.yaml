@@ -1,0 +1,17 @@
+id: test-36-raw-get
+info:
+  name: Raw GET Request Test
+  severity: info
+http:
+  - raw:
+      - |
+        GET /test/raw-get-test HTTP/1.1
+        Host: {{Hostname}}
+    matchers-condition: and
+    matchers:
+      - type: word
+        words:
+          - "raw-get-response"
+      - type: status
+        status:
+          - 200

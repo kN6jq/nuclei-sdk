@@ -1,0 +1,13 @@
+id: test-32-dsl-to-upper
+info:
+  name: DSL to_upper Function Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/to-upper"
+    matchers-condition: and
+    matchers:
+      - type: dsl
+        dsl:
+          - 'to_upper(body) == "UPPERCASE RESPONSE BODY"'

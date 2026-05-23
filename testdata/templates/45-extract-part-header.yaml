@@ -1,0 +1,22 @@
+id: test-45-extract-part-header
+info:
+  name: Extractor with Part Header Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/extract-part-header"
+    extractors:
+      - type: kval
+        name: header_val
+        part: header
+        kval:
+          - "X-Extract-Me"
+    matchers-condition: and
+    matchers:
+      - type: word
+        words:
+          - "body for extract"
+      - type: status
+        status:
+          - 200

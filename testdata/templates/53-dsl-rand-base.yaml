@@ -1,0 +1,18 @@
+id: test-53-dsl-rand-base
+info:
+  name: DSL rand_base Variable Function Test
+  severity: info
+variables:
+  rstr: "{{rand_base(10)}}"
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/dsl-rand-base?echo={{rstr}}"
+    matchers-condition: and
+    matchers:
+      - type: word
+        words:
+          - "rand-base-ok"
+      - type: status
+        status:
+          - 200

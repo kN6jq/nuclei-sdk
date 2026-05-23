@@ -1,0 +1,18 @@
+id: test-51-dsl-rand-alpha
+info:
+  name: DSL rand_text_alpha Variable Function Test
+  severity: info
+variables:
+  rstr: "{{rand_text_alpha(8)}}"
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/dsl-rand-alpha?echo={{rstr}}"
+    matchers-condition: and
+    matchers:
+      - type: word
+        words:
+          - "rand-alpha-ok"
+      - type: status
+        status:
+          - 200
