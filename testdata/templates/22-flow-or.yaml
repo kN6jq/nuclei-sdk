@@ -1,0 +1,20 @@
+id: test-22-flow-or
+info:
+  name: Flow OR Test
+  severity: info
+flow: http(1) || http(2)
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/flow-or?step=1"
+    matchers:
+      - type: word
+        words:
+          - "will-not-match"
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/flow-or?step=2"
+    matchers:
+      - type: word
+        words:
+          - "or-pass"

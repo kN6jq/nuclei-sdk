@@ -1,0 +1,16 @@
+id: test-26-dsl-complex
+info:
+  name: Complex DSL Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/dsl-complex"
+    matchers-condition: and
+    matchers:
+      - type: dsl
+        dsl:
+          - 'status_code == 200'
+          - 'contains(tolower(header), "x-dsl-test")'
+          - 'len(body) > 0'
+        condition: and

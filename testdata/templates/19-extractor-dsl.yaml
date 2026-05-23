@@ -1,0 +1,17 @@
+id: test-19-extractor-dsl
+info:
+  name: DSL Extractor Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/extract-dsl"
+    extractors:
+      - type: dsl
+        name: body_length
+        dsl:
+          - "len(body)"
+    matchers:
+      - type: status
+        status:
+          - 200

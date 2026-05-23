@@ -1,0 +1,16 @@
+id: test-25-dsl-contains
+info:
+  name: DSL Contains Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/dsl-all"
+    matchers-condition: and
+    matchers:
+      - type: dsl
+        dsl:
+          - 'contains_all(body, "keyword1", "keyword2", "keyword3")'
+      - type: dsl
+        dsl:
+          - 'contains_any(body, "alpha", "beta", "gamma")'

@@ -1,0 +1,18 @@
+id: test-28-title-cookie
+info:
+  name: Title and Cookie Part Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/title-cookie"
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: title
+        words:
+          - "Title Test Page"
+      - type: word
+        part: cookie
+        words:
+          - "session_id"

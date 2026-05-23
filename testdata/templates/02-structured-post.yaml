@@ -1,0 +1,20 @@
+id: test-02-structured-post
+info:
+  name: Structured POST Test
+  severity: medium
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/test/post-login"
+    headers:
+      Content-Type: "application/x-www-form-urlencoded"
+    body: "user=admin&pass=123456"
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - '"success":true'
+      - type: status
+        status:
+          - 200

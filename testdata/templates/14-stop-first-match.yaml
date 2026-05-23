@@ -1,0 +1,14 @@
+id: test-14-stop-first-match
+info:
+  name: Stop At First Match
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/stop-first"
+      - "{{BaseURL}}/test/structured"
+    stop-at-first-match: true
+    matchers:
+      - type: word
+        words:
+          - "Welcome to TestApp"

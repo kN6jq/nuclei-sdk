@@ -1,0 +1,17 @@
+id: test-18-extractor-kval
+info:
+  name: KVal Extractor Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/extract-kval"
+    extractors:
+      - type: kval
+        name: secret
+        kval:
+          - "X-Token"
+    matchers:
+      - type: status
+        status:
+          - 200

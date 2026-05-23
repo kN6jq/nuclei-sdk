@@ -1,0 +1,17 @@
+id: test-20-extractor-json
+info:
+  name: JSON Extractor Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/extract-json"
+    extractors:
+      - type: json
+        name: username
+        json:
+          - ".user"
+    matchers:
+      - type: word
+        words:
+          - "admin"

@@ -1,0 +1,19 @@
+id: test-11-variables
+info:
+  name: Variables Test
+  severity: info
+variables:
+  test_param: "hello_nuclei"
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/variables?echo={{test_param}}"
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "hello_nuclei"
+      - type: status
+        status:
+          - 200

@@ -1,0 +1,15 @@
+id: test-07-dsl-matcher
+info:
+  name: DSL Matcher Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/dsl-check"
+    matchers-condition: and
+    matchers:
+      - type: dsl
+        dsl:
+          - 'contains(body, "dsl-test-marker")'
+          - 'status_code == 200'
+        condition: and

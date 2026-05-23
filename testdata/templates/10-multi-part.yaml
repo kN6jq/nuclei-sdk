@@ -1,0 +1,30 @@
+id: test-10-multi-part
+info:
+  name: Multi Part Matcher Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/multi-part"
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "multi-part-body"
+      - type: word
+        part: header
+        words:
+          - "X-Custom-Header"
+      - type: word
+        part: content_type
+        words:
+          - "text/html"
+      - type: word
+        part: title
+        words:
+          - "Multi Part Test"
+      - type: word
+        part: cookie
+        words:
+          - "test_cookie"

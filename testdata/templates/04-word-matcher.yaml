@@ -1,0 +1,14 @@
+id: test-04-word-matcher
+info:
+  name: Word Matcher Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/structured"
+    matchers:
+      - type: word
+        condition: and
+        words:
+          - "Welcome"
+          - "TestApp"

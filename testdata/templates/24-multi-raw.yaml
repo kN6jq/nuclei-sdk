@@ -1,0 +1,23 @@
+id: test-24-multi-raw
+info:
+  name: Multi Raw Request Test
+  severity: info
+http:
+  - raw:
+      - |
+        GET /test/structured HTTP/1.1
+        Host: {{Hostname}}
+
+      - |
+        GET /test/git-head HTTP/1.1
+        Host: {{Hostname}}
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body_2
+        words:
+          - "ref:"
+      - type: status
+        status:
+          - 200

@@ -1,0 +1,17 @@
+id: test-08-negative-matcher
+info:
+  name: Negative Matcher Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/negative"
+    matchers-condition: and
+    matchers:
+      - type: word
+        negative: true
+        words:
+          - "admin"
+      - type: status
+        status:
+          - 200

@@ -1,0 +1,18 @@
+id: test-17-extractor-regex
+info:
+  name: Regex Extractor Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/extract-regex"
+    extractors:
+      - type: regex
+        name: token
+        group: 1
+        regex:
+          - "token: ([a-z0-9]+)"
+    matchers:
+      - type: word
+        words:
+          - "token:"

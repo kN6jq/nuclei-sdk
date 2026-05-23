@@ -1,0 +1,22 @@
+id: test-03-raw-request
+info:
+  name: Raw Request Test
+  severity: info
+http:
+  - raw:
+      - |
+        POST /test/raw-echo HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: text/plain
+        X-Test-Header: nuclei-sdk
+
+        raw-body-content
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "raw-body-content"
+      - type: status
+        status:
+          - 200

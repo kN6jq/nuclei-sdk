@@ -1,0 +1,17 @@
+id: test-27-header-type
+info:
+  name: Content-Type Part Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/header-type"
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: content_type
+        words:
+          - "application/json"
+      - type: status
+        status:
+          - 200

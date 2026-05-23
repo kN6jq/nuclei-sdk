@@ -1,0 +1,13 @@
+id: test-13-randstr
+info:
+  name: Randstr Test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/randstr?echo={{randstr}}"
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "randstr_ok"

@@ -1,0 +1,21 @@
+id: test-21-flow-and
+info:
+  name: Flow AND Test
+  severity: info
+flow: http(1) && http(2)
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/flow-check?step=1"
+    matchers:
+      - type: word
+        words:
+          - "version:2.0"
+        internal: true
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/flow-check?step=2"
+    matchers:
+      - type: word
+        words:
+          - "flow-pass"

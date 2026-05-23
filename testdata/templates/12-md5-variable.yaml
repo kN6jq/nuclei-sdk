@@ -1,0 +1,19 @@
+id: test-12-md5-variable
+info:
+  name: MD5 Variable Test
+  severity: info
+variables:
+  num: "999999999"
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/md5-verify?hash={{md5(num)}}"
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "hash_match"
+      - type: status
+        status:
+          - 200
