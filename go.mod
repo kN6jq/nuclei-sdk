@@ -1,4 +1,4 @@
-module github.com/Xm17/nuclei-sdk
+module github.com/kN6jq/nuclei-sdk
 
 go 1.26.3
 
