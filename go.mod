@@ -1,4 +1,4 @@
-module github.com/projectdiscovery/nuclei-sdk
+module github.com/Xm17/nuclei-sdk
 
 go 1.26.3
 
