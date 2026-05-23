@@ -361,5 +361,67 @@ def dsl_ctx_variables():
     resp.set_cookie("session", "ctx-cookie-val")
     return resp
 
+# --- Real-world integration test routes ---
+
+@app.route("/test/cve-login", methods=["POST"])
+def cve_login():
+    """Simulates a login endpoint that sets a session cookie."""
+    user = request.form.get("username", "")
+    pw = request.form.get("password", "")
+    if user == "admin" and pw == "admin123":
+        resp = make_response(jsonify({"status": "ok", "token": "SESS_ADMIN_001"}))
+        resp.set_cookie("sessionid", "admin_session_token")
+        return resp
+    return jsonify({"status": "error"}), 401
+
+@app.route("/test/cve-admin-panel")
+def cve_admin_panel():
+    """Requires session cookie, returns admin-only data."""
+    sessionid = request.cookies.get("sessionid", "")
+    if sessionid == "admin_session_token":
+        return jsonify({"admin": True, "version": "2.0.1", "users": ["admin", "root"]})
+    return "Forbidden", 403
+
+@app.route("/test/cve-upload", methods=["POST"])
+def cve_upload():
+    """Simulates file upload vulnerability - accepts any file."""
+    import os
+    filename = request.args.get("name", "test.txt")
+    data = request.get_data(as_text=True)
+    if "shell" in data.lower() or "cmd" in data.lower():
+        return jsonify({"uploaded": True, "path": f"/uploads/{filename}", "exec": "ok"})
+    return jsonify({"uploaded": False}), 400
+
+@app.route("/test/fp-spring")
+def fp_spring():
+    """Simulates Spring Boot actuator response."""
+    resp = make_response('{"_links":{"self":{"href":"http://localhost/actuator","templated":false}}}')
+    resp.headers["Content-Type"] = "application/vnd.spring-boot.actuator.v3+json"
+    return resp
+
+@app.route("/test/fp-druid")
+def fp_druid():
+    """Simulates Apache Druid/Druid monitor."""
+    resp = make_response('<html><head><title>Druid StatView</title></head><body>Druid Monitor</body></html>')
+    resp.headers["X-Druid-Stat"] = "enabled"
+    return resp
+
+@app.route("/test/fp-nginx")
+def fp_nginx():
+    """Simulates Nginx default page."""
+    resp = make_response("<html><head><title>Welcome to nginx!</title></head><body><center><h1>Welcome to nginx!</h1></center></body></html>")
+    resp.headers["Server"] = "nginx/1.24.0"
+    return resp
+
+@app.route("/test/cve-sqli")
+def cve_sqli():
+    """Simulates SQL injection vulnerability."""
+    id_param = request.args.get("id", "")
+    if "'" in id_param or "OR" in id_param.upper():
+        return jsonify({"error": "SQL syntax error near '" + id_param + "'"})
+    if id_param == "1":
+        return jsonify({"id": 1, "name": "admin", "email": "admin@test.com"})
+    return jsonify({"id": int(id_param)}), 404
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=18080, debug=False)

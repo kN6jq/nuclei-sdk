@@ -70,7 +70,7 @@ func main() {
 			ID:       tmpl.Id,
 			Name:     tmpl.Info.Name,
 			Severity: tmpl.Info.Severity,
-			Expected: true,
+			Expected: !strings.Contains(tmpl.Id, "-neg-"),
 		}
 		if err != nil {
 			tc.Error = fmt.Sprintf("execute: %v", err)

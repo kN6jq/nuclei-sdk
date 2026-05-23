@@ -1,0 +1,13 @@
+id: test-61-neg-status-miss
+info:
+  name: Negative - Wrong Status Code
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/structured"
+    matchers:
+      - type: status
+        status:
+          - 403
+          - 500

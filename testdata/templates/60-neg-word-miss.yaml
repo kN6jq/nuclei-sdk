@@ -1,0 +1,12 @@
+id: test-60-neg-word-miss
+info:
+  name: Negative - Word Not In Body
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/structured"
+    matchers:
+      - type: word
+        words:
+          - "this-should-not-exist"

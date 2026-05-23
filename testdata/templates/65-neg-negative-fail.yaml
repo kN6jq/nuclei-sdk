@@ -1,0 +1,17 @@
+id: test-65-neg-negative-fail
+info:
+  name: Negative - Negative Matcher Finds Word
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/structured"
+    matchers-condition: and
+    matchers:
+      - type: word
+        negative: true
+        words:
+          - "Welcome"
+      - type: status
+        status:
+          - 200

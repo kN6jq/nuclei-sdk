@@ -1,4 +1,4 @@
-id: test-42-neg-status
+id: test-42-negative-status
 info:
   name: Negative Status Matcher Test
   severity: info

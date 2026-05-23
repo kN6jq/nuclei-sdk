@@ -1,0 +1,12 @@
+id: test-63-neg-dsl-miss
+info:
+  name: Negative - DSL Condition False
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/structured"
+    matchers:
+      - type: dsl
+        dsl:
+          - 'status_code == 500'

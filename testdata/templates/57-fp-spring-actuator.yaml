@@ -1,0 +1,32 @@
+id: test-57-fp-spring-actuator
+info:
+  name: Spring Boot Actuator Fingerprint
+  author: test
+  severity: info
+  description: Detects Spring Boot Actuator via /actuator endpoint
+  tags: fingerprint,spring,actuator
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/fp-spring"
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "_links"
+          - "actuator"
+        condition: and
+      - type: word
+        part: content_type
+        words:
+          - "spring-boot"
+      - type: status
+        status:
+          - 200
+    extractors:
+      - type: regex
+        name: actuator_url
+        group: 1
+        regex:
+          - '"href":"([^"]+actuator[^"]*)"'

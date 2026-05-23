@@ -1,0 +1,12 @@
+id: test-62-neg-regex-miss
+info:
+  name: Negative - Regex Not Matching
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/test/structured"
+    matchers:
+      - type: regex
+        regex:
+          - "error_code_\\d{5}"
