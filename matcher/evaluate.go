@@ -1,37 +1,19 @@
-package nuclei
+package matcher
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
+
+	"github.com/kN6jq/nuclei-sdk/dsl"
+	"github.com/kN6jq/nuclei-sdk/http"
 )
 
-// Matcher represents a condition to check against HTTP response data.
-type Matcher struct {
-	Type      string   `yaml:"type"`
-	Condition string   `yaml:"condition,omitempty"`
-	Part      string   `yaml:"part,omitempty"`
-	Negative  bool     `yaml:"negative,omitempty"`
-	Internal  bool     `yaml:"internal,omitempty"`
-	Words     []string `yaml:"words,omitempty"`
-	Regex     []string `yaml:"regex,omitempty"`
-	Status    []int    `yaml:"status,omitempty"`
-	DSL       []string `yaml:"dsl,omitempty"`
-
-	regexCompiled []*regexp.Regexp
-}
-
-// MatcherType constants
-const (
-	MatcherWord   = "word"
-	MatcherRegex  = "regex"
-	MatcherStatus = "status"
-	MatcherDSL    = "dsl"
-)
+// ResponseData is an alias for http.ResponseData.
+type ResponseData = http.ResponseData
 
 // evaluateMatchers evaluates all matchers in a request against response data.
 // Returns true if matched (respecting matchers-condition).
-func evaluateMatchers(matchers []*Matcher, condition string, resp *ResponseData, allResponses map[int]*ResponseData, dynamicValues map[string][]string) bool {
+func EvaluateMatchers(matchers []*Matcher, condition string, resp *ResponseData, allResponses map[int]*ResponseData, dynamicValues map[string][]string) bool {
 	if len(matchers) == 0 {
 		return false
 	}
@@ -128,7 +110,7 @@ func (m *Matcher) matchRegex(resp *ResponseData, allResponses map[int]*ResponseD
 	for _, corpus := range corpuses {
 		if m.Condition == "and" {
 			allMatch := true
-			for _, re := range m.regexCompiled {
+			for _, re := range m.RegexCompiled {
 				if !re.MatchString(corpus) {
 					allMatch = false
 					break
@@ -138,7 +120,7 @@ func (m *Matcher) matchRegex(resp *ResponseData, allResponses map[int]*ResponseD
 				return true
 			}
 		} else {
-			for _, re := range m.regexCompiled {
+			for _, re := range m.RegexCompiled {
 				if re.MatchString(corpus) {
 					return true
 				}
@@ -161,11 +143,11 @@ func (m *Matcher) matchStatus(resp *ResponseData, allResponses map[int]*Response
 }
 
 func (m *Matcher) matchDSL(resp *ResponseData, allResponses map[int]*ResponseData, dynamicValues map[string][]string) bool {
-	ctx := buildDSLContext(resp, 0, allResponses, dynamicValues)
+	ctx := BuildDSLContext(resp, 0, allResponses, dynamicValues)
 
 	if m.Condition == "and" {
 		for _, expr := range m.DSL {
-			if !EvaluateDSLBool(expr, ctx) {
+			if !dsl.EvaluateDSLBool(expr, ctx) {
 				return false
 			}
 		}
@@ -173,7 +155,7 @@ func (m *Matcher) matchDSL(resp *ResponseData, allResponses map[int]*ResponseDat
 	}
 
 	for _, expr := range m.DSL {
-		if EvaluateDSLBool(expr, ctx) {
+		if dsl.EvaluateDSLBool(expr, ctx) {
 			return true
 		}
 	}
@@ -187,13 +169,13 @@ func (m *Matcher) getCorpus(resp *ResponseData, allResponses map[int]*ResponseDa
 	if idx := extractPartIndex(m.Part); idx > 0 {
 		if r, ok := allResponses[idx]; ok {
 			part := stripPartIndex(m.Part)
-			return []string{getPartData(part, r)}
+			return []string{GetPartData(part, r)}
 		}
 		return nil
 	}
 
 	// Current response
-	return []string{getPartData(m.Part, resp)}
+	return []string{GetPartData(m.Part, resp)}
 }
 
 func (m *Matcher) getStatuses(resp *ResponseData, allResponses map[int]*ResponseData) []int {
@@ -206,7 +188,8 @@ func (m *Matcher) getStatuses(resp *ResponseData, allResponses map[int]*Response
 	return []int{resp.StatusCode}
 }
 
-func getPartData(part string, resp *ResponseData) string {
+// GetPartData extracts the relevant response part as a string.
+func GetPartData(part string, resp *ResponseData) string {
 	switch part {
 	case "body", "":
 		return resp.Body
@@ -259,7 +242,8 @@ func stripPartIndex(part string) string {
 	return part[:i]
 }
 
-func buildDSLContext(resp *ResponseData, idx int, allResponses map[int]*ResponseData, dynamicValues map[string][]string) map[string]interface{} {
+// BuildDSLContext creates a context map for DSL evaluation from response data.
+func BuildDSLContext(resp *ResponseData, idx int, allResponses map[int]*ResponseData, dynamicValues map[string][]string) map[string]interface{} {
 	ctx := map[string]interface{}{
 		"status_code":  resp.StatusCode,
 		"body":         resp.Body,

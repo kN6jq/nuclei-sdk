@@ -1,34 +1,32 @@
-package nuclei
+package template
 
 import (
-	"bytes"
+	"bufio"
 	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
-	"net/http"
+	stdhttp "net/http"
 	"net/http/cookiejar"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/kN6jq/nuclei-sdk/extractor"
+	"github.com/kN6jq/nuclei-sdk/http"
+	"github.com/kN6jq/nuclei-sdk/matcher"
+	"github.com/kN6jq/nuclei-sdk/variables"
 )
 
 // ResponseData holds parsed HTTP response data for matcher evaluation.
-type ResponseData struct {
-	StatusCode  int
-	Body        string
-	Headers     string
-	ContentType string
-	Title       string
-	Cookies     string
-	Duration    float64
-	All         string
-}
+type ResponseData = http.ResponseData
 
 // defaultTimeout is the default per-request timeout.
 const defaultTimeout = 10 * time.Second
 
 // executeRequest sends an HTTP request and returns the response data.
-func executeRequest(client *http.Client, req *http.Request) (*ResponseData, error) {
+func executeRequest(client *stdhttp.Client, req *stdhttp.Request) (*ResponseData, error) {
 	start := time.Now()
 	resp, err := client.Do(req)
 	if err != nil {
@@ -76,6 +74,82 @@ func executeRequest(client *http.Client, req *http.Request) (*ResponseData, erro
 	}, nil
 }
 
+// parseRawRequest parses a raw HTTP request text into its components.
+func parseRawRequest(raw, baseURL string) (method, reqPath string, headers map[string]string, body string, timeout time.Duration, err error) {
+	timeoutAnnotationRe := regexp.MustCompile(`@timeout:\s*(\d+)(ms|s|m)`)
+
+	// Extract and remove @timeout annotation
+	if m := timeoutAnnotationRe.FindStringSubmatch(raw); len(m) == 3 {
+		val, _ := strconv.Atoi(m[1])
+		switch m[2] {
+		case "ms":
+			timeout = time.Duration(val) * time.Millisecond
+		case "s":
+			timeout = time.Duration(val) * time.Second
+		case "m":
+			timeout = time.Duration(val) * time.Minute
+		}
+		raw = timeoutAnnotationRe.ReplaceAllString(raw, "")
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(raw))
+	scanner.Buffer(make([]byte, 0, 65536), 65536)
+
+	// Skip empty lines and annotations
+	for scanner.Scan() {
+		line := scanner.Text()
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "@") {
+			continue
+		}
+		parts := strings.SplitN(trimmed, " ", 3)
+		if len(parts) < 2 {
+			continue
+		}
+		method = parts[0]
+		reqPath = parts[1]
+		break
+	}
+
+	headers = make(map[string]string)
+
+	// Parse headers
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.TrimSpace(line) == "" {
+			break
+		}
+		idx := strings.Index(line, ":")
+		if idx < 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[:idx])
+		val := strings.TrimSpace(line[idx+1:])
+		headers[key] = val
+	}
+
+	// Remaining is body
+	var bodyLines []string
+	for scanner.Scan() {
+		bodyLines = append(bodyLines, scanner.Text())
+	}
+	body = strings.Join(bodyLines, "\n")
+
+	if method == "" {
+		err = fmt.Errorf("no request line found in raw request")
+	}
+
+	return
+}
+
+// buildRawHTTPURL combines baseURL with the path from raw request.
+func buildRawHTTPURL(baseURL, rawPath string) string {
+	if strings.HasPrefix(rawPath, "http://") || strings.HasPrefix(rawPath, "https://") {
+		return rawPath
+	}
+	return strings.TrimRight(baseURL, "/") + rawPath
+}
+
 // executeRequestBlock executes all requests in a Request block against a target.
 // Returns the final result (matched or not) and any dynamic values extracted.
 func executeRequestBlock(req *Request, target string, vars map[string]string) (*Result, error) {
@@ -87,7 +161,7 @@ func executeRequestBlock(req *Request, target string, vars map[string]string) (*
 	dynamicValues := make(map[string][]string)
 
 	// Cookie jar for cookie-reuse
-	var jar http.CookieJar
+	var jar stdhttp.CookieJar
 	if req.CookieReuse {
 		jar, _ = cookiejar.New(nil)
 		client.Jar = jar
@@ -103,7 +177,7 @@ func executeRequestBlock(req *Request, target string, vars map[string]string) (*
 					vars[k] = v[0]
 				}
 			}
-			raw = Substitute(raw, vars)
+			raw = variables.Substitute(raw, vars)
 			method, rawPath, headers, body, timeoutOverride, err := parseRawRequest(raw, target)
 			if err != nil {
 				continue
@@ -118,8 +192,7 @@ func executeRequestBlock(req *Request, target string, vars map[string]string) (*
 			ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
 			defer cancel()
 
-
-			httpReq, err := http.NewRequestWithContext(ctx, method, reqURL, strings.NewReader(body))
+			httpReq, err := stdhttp.NewRequestWithContext(ctx, method, reqURL, strings.NewReader(body))
 			if err != nil {
 				continue
 			}
@@ -135,15 +208,15 @@ func executeRequestBlock(req *Request, target string, vars map[string]string) (*
 			allResponses[i+1] = resp
 
 			// Run extractors
-			runExtractors(req.Extractors, resp, allResponses, dynamicValues)
+			extractor.RunExtractors(req.Extractors, resp, allResponses, dynamicValues)
 		}
 	} else {
 		// Structured request mode
 		for i, path := range req.Path {
-			path = Substitute(path, vars)
+			path = variables.Substitute(path, vars)
 			reqURL := buildRawHTTPURL(target, path)
 
-			body := Substitute(req.Body, vars)
+			body := variables.Substitute(req.Body, vars)
 			method := req.Method
 			if method == "" {
 				method = "GET"
@@ -156,12 +229,12 @@ func executeRequestBlock(req *Request, target string, vars map[string]string) (*
 			if body != "" {
 				bodyReader = strings.NewReader(body)
 			}
-			httpReq, err := http.NewRequestWithContext(ctx, method, reqURL, bodyReader)
+			httpReq, err := stdhttp.NewRequestWithContext(ctx, method, reqURL, bodyReader)
 			if err != nil {
 				continue
 			}
 			for k, v := range req.Headers {
-				httpReq.Header.Set(k, Substitute(v, vars))
+				httpReq.Header.Set(k, variables.Substitute(v, vars))
 			}
 
 			resp, err := executeRequest(client, httpReq)
@@ -172,7 +245,7 @@ func executeRequestBlock(req *Request, target string, vars map[string]string) (*
 			allResponses[i+1] = resp
 
 			// Run extractors
-			runExtractors(req.Extractors, resp, allResponses, dynamicValues)
+			extractor.RunExtractors(req.Extractors, resp, allResponses, dynamicValues)
 
 			// For single-response templates, use last response as "current"
 			if len(req.Path) == 1 {
@@ -199,7 +272,7 @@ func executeRequestBlock(req *Request, target string, vars map[string]string) (*
 		return &Result{Matched: false}, nil
 	}
 
-	matched := evaluateMatchers(req.Matchers, req.MatchersCondition, currentResp, allResponses, dynamicValues)
+	matched := matcher.EvaluateMatchers(req.Matchers, req.MatchersCondition, currentResp, allResponses, dynamicValues)
 
 	return &Result{
 		Matched:       matched,
@@ -209,23 +282,23 @@ func executeRequestBlock(req *Request, target string, vars map[string]string) (*
 	}, nil
 }
 
-func buildHTTPClient(req *Request) *http.Client {
+func buildHTTPClient(req *Request) *stdhttp.Client {
 	maxRedirects := 0
 	if req.MaxRedirects > 0 {
 		maxRedirects = req.MaxRedirects
 	}
 
-	client := &http.Client{
+	client := &stdhttp.Client{
 		Timeout: 30 * time.Second,
-		Transport: &http.Transport{
+		Transport: &stdhttp.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
-		CheckRedirect: func(r *http.Request, via []*http.Request) error {
+		CheckRedirect: func(r *stdhttp.Request, via []*stdhttp.Request) error {
 			if !req.HostRedirects {
-				return http.ErrUseLastResponse
+				return stdhttp.ErrUseLastResponse
 			}
 			if maxRedirects > 0 && len(via) >= maxRedirects {
-				return http.ErrUseLastResponse
+				return stdhttp.ErrUseLastResponse
 			}
 			return nil
 		},
@@ -233,24 +306,7 @@ func buildHTTPClient(req *Request) *http.Client {
 	return client
 }
 
-// executePOSTForm sends a POST request with form-encoded body.
-func executePOSTForm(client *http.Client, reqURL string, body string, headers map[string]string) (*ResponseData, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
-	defer cancel()
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", reqURL, strings.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	if _, ok := headers["Content-Type"]; !ok {
-		httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	}
-	for k, v := range headers {
-		httpReq.Header.Set(k, v)
-	}
-	return executeRequest(client, httpReq)
-}
-
+// extractTitle extracts the <title> content from HTML body.
 func extractTitle(body string) string {
 	lower := strings.ToLower(body)
 	start := strings.Index(lower, "<title>")
@@ -263,27 +319,6 @@ func extractTitle(body string) string {
 		return strings.TrimSpace(body[start:])
 	}
 	return strings.TrimSpace(body[start : start+end])
-}
-
-// substituteAndBuildHTTPRequest creates an *http.Request with substituted variables.
-func substituteAndBuildHTTPRequest(method, rawURL, body string, headers map[string]string, vars map[string]string) (*http.Request, error) {
-	rawURL = Substitute(rawURL, vars)
-	body = Substitute(body, vars)
-
-	var bodyReader io.Reader
-	if body != "" {
-		bodyReader = bytes.NewReader([]byte(body))
-	}
-
-	req, err := http.NewRequest(method, rawURL, bodyReader)
-	if err != nil {
-		return nil, err
-	}
-
-	for k, v := range headers {
-		req.Header.Set(k, Substitute(v, vars))
-	}
-	return req, nil
 }
 
 // resolveTargetURL ensures the target URL has a scheme.

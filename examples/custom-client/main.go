@@ -1,8 +1,12 @@
 package main
 
 import (
+	"crypto/tls"
 	"fmt"
+	"net/http"
+	"net/http/cookiejar"
 	"os"
+	"time"
 
 	nuclei "github.com/kN6jq/nuclei-sdk/nuclei"
 )
@@ -10,33 +14,7 @@ import (
 func main() {
 	if len(os.Args) < 3 {
 		fmt.Fprintf(os.Stderr, "Usage: %s <template.yaml> <target-url>\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "   Or: %s --dir <templates-dir> <target-url>\n", os.Args[0])
 		os.Exit(1)
-	}
-
-	target := os.Args[len(os.Args)-1]
-
-	if os.Args[1] == "--dir" {
-		templates, err := nuclei.LoadFromDir(os.Args[2])
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading templates: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("Loaded %d templates from %s\n", len(templates), os.Args[2])
-
-		for _, tmpl := range templates {
-			result, err := tmpl.Execute(target)
-			if err != nil {
-				fmt.Printf("  [ERR] %s: %v\n", tmpl.Id, err)
-				continue
-			}
-			status := "not matched"
-			if result.Matched {
-				status = "MATCHED"
-			}
-			fmt.Printf("  [%s] %s (%s) — %s\n", status, result.TemplateID, result.Severity, result.TemplateName)
-		}
-		return
 	}
 
 	data, err := os.ReadFile(os.Args[1])
@@ -56,9 +34,27 @@ func main() {
 		os.Exit(1)
 	}
 
+	target := os.Args[2]
 	fmt.Printf("Template: %s (%s) [%s]\n", tmpl.Info.Name, tmpl.Id, tmpl.Info.Severity)
 	fmt.Printf("Executing against: %s\n", target)
 
+	// Create a custom HTTP client with specific settings
+	customClient := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: false, // Verify TLS certificates
+			},
+		},
+	}
+
+	// Optionally add cookie jar for cookie reuse across requests
+	jar, _ := cookiejar.New(nil)
+	customClient.Jar = jar
+
+	// Execute with our custom client
+	// Note: The current SDK Execute method doesn't support custom clients yet,
+	// this is a placeholder showing how it would be used in the future.
 	result, err := tmpl.Execute(target)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error executing: %v\n", err)

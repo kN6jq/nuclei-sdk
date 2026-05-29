@@ -1,4 +1,4 @@
-package nuclei
+package template
 
 import (
 	"fmt"

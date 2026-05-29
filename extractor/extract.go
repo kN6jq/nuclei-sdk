@@ -1,42 +1,19 @@
-package nuclei
+package extractor
 
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
+
+	"github.com/kN6jq/nuclei-sdk/dsl"
+	"github.com/kN6jq/nuclei-sdk/matcher"
 )
 
-// Extractor represents a data extractor from HTTP response.
-type Extractor struct {
-	Type           string   `yaml:"type"`                      // regex|kval|dsl|json
-	Part           string   `yaml:"part,omitempty"`             // body|header|all
-	Name           string   `yaml:"name,omitempty"`             // name for dynamic values
-	Group          int      `yaml:"group,omitempty"`            // regex capture group
-	Regex          []string `yaml:"regex,omitempty"`
-	KVal           []string `yaml:"kval,omitempty"`
-	DSL            []string `yaml:"dsl,omitempty"`
-	JSON           []string `yaml:"json,omitempty"`
-	Internal       bool     `yaml:"internal,omitempty"`         // pass to next request, don't report
-	CaseInsensitive bool    `yaml:"case-insensitive,omitempty"`
+// ResponseData is an alias for the shared response data type.
+type ResponseData = matcher.ResponseData
 
-	regexCompiled []*regexp.Regexp
-}
-
-// compile compiles regex patterns in the extractor.
-func (e *Extractor) compile() error {
-	for _, pattern := range e.Regex {
-		re, err := regexp.Compile(pattern)
-		if err != nil {
-			return fmt.Errorf("extractor regex compile error: %w", err)
-		}
-		e.regexCompiled = append(e.regexCompiled, re)
-	}
-	return nil
-}
-
-// runExtractors executes all extractors on the response data.
-func runExtractors(extractors []*Extractor, resp *ResponseData, allResponses map[int]*ResponseData, dynamicValues map[string][]string) {
+// RunExtractors executes all extractors on the response data.
+func RunExtractors(extractors []*Extractor, resp *ResponseData, allResponses map[int]*ResponseData, dynamicValues map[string][]string) {
 	for _, ext := range extractors {
 		results := ext.extract(resp, allResponses)
 		if ext.Name != "" && len(results) > 0 {
@@ -46,7 +23,7 @@ func runExtractors(extractors []*Extractor, resp *ResponseData, allResponses map
 }
 
 func (e *Extractor) extract(resp *ResponseData, allResponses map[int]*ResponseData) []string {
-	corpus := getPartData(e.Part, resp)
+	corpus := matcher.GetPartData(e.Part, resp)
 	if corpus == "" {
 		corpus = resp.Body
 	}
@@ -66,7 +43,7 @@ func (e *Extractor) extract(resp *ResponseData, allResponses map[int]*ResponseDa
 
 func (e *Extractor) extractRegex(corpus string) []string {
 	var results []string
-	for _, re := range e.regexCompiled {
+	for _, re := range e.RegexCompiled {
 		matches := re.FindAllStringSubmatch(corpus, -1)
 		for _, match := range matches {
 			if e.Group < len(match) {
@@ -123,10 +100,10 @@ func (e *Extractor) extractKVal(resp *ResponseData) []string {
 }
 
 func (e *Extractor) extractDSL(resp *ResponseData, allResponses map[int]*ResponseData) []string {
-	ctx := buildDSLContext(resp, 0, allResponses, nil)
+	ctx := matcher.BuildDSLContext(resp, 0, allResponses, nil)
 	var results []string
 	for _, expr := range e.DSL {
-		val, err := EvaluateDSL(expr, ctx)
+		val, err := dsl.EvaluateDSL(expr, ctx)
 		if err == nil && val != nil {
 			results = append(results, fmt.Sprintf("%v", val))
 		}

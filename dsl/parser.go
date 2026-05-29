@@ -1,29 +1,11 @@
-package nuclei
+package dsl
 
 import (
-	"encoding/base64"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
 )
-
-// EvaluateDSL evaluates a DSL expression against a context map.
-// Returns the result as an interface{} (bool, float64, or string).
-func EvaluateDSL(expr string, ctx map[string]interface{}) (interface{}, error) {
-	p := newParser(strings.TrimSpace(expr), ctx)
-	return p.parseExpression()
-}
-
-// EvaluateDSLBool evaluates a DSL expression and returns a boolean.
-func EvaluateDSLBool(expr string, ctx map[string]interface{}) bool {
-	result, err := EvaluateDSL(expr, ctx)
-	if err != nil {
-		return false
-	}
-	return toBool(result)
-}
 
 type parser struct {
 	input string
@@ -231,7 +213,7 @@ func (p *parser) parseIdentOrFunc() (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		return callDSLFunc(ident, args)
+		return callFunc(ident, args)
 	}
 
 	// Variable lookup
@@ -290,156 +272,4 @@ func (p *parser) match(s string) bool {
 		return true
 	}
 	return false
-}
-
-func toBool(v interface{}) bool {
-	switch val := v.(type) {
-	case bool:
-		return val
-	case float64:
-		return val != 0
-	case string:
-		return val != ""
-	case nil:
-		return false
-	default:
-		return false
-	}
-}
-
-func toFloat(v interface{}) float64 {
-	switch val := v.(type) {
-	case float64:
-		return val
-	case int:
-		return float64(val)
-	case string:
-		f, err := strconv.ParseFloat(val, 64)
-		if err != nil {
-			return 0
-		}
-		return f
-	case bool:
-		if val {
-			return 1
-		}
-		return 0
-	default:
-		return 0
-	}
-}
-
-func compare(left interface{}, op string, right interface{}) bool {
-	switch op {
-	case "==":
-		return fmt.Sprintf("%v", left) == fmt.Sprintf("%v", right)
-	case "!=":
-		return fmt.Sprintf("%v", left) != fmt.Sprintf("%v", right)
-	case ">=":
-		return toFloat(left) >= toFloat(right)
-	case "<=":
-		return toFloat(left) <= toFloat(right)
-	case ">":
-		return toFloat(left) > toFloat(right)
-	case "<":
-		return toFloat(left) < toFloat(right)
-	}
-	return false
-}
-
-func callDSLFunc(name string, args []interface{}) (interface{}, error) {
-	strArgs := make([]string, len(args))
-	for i, a := range args {
-		strArgs[i] = fmt.Sprintf("%v", a)
-	}
-
-	switch name {
-	case "contains":
-		if len(strArgs) >= 2 {
-			return strings.Contains(strArgs[0], strArgs[1]), nil
-		}
-	case "contains_all":
-		if len(strArgs) >= 2 {
-			for _, s := range strArgs[1:] {
-				if !strings.Contains(strArgs[0], s) {
-					return false, nil
-				}
-			}
-			return true, nil
-		}
-	case "contains_any":
-		if len(strArgs) >= 2 {
-			for _, s := range strArgs[1:] {
-				if strings.Contains(strArgs[0], s) {
-					return true, nil
-				}
-			}
-			return false, nil
-		}
-	case "tolower":
-		if len(strArgs) >= 1 {
-			return strings.ToLower(strArgs[0]), nil
-		}
-	case "to_lower":
-		if len(strArgs) >= 1 {
-			return strings.ToLower(strArgs[0]), nil
-		}
-	case "to_upper":
-		if len(strArgs) >= 1 {
-			return strings.ToUpper(strArgs[0]), nil
-		}
-	case "len":
-		if len(strArgs) >= 1 {
-			return float64(len(strArgs[0])), nil
-		}
-	case "md5":
-		if len(strArgs) >= 1 {
-			return callFunc("md5", strArgs[0]), nil
-		}
-	case "base64":
-		if len(strArgs) >= 1 {
-			return base64.StdEncoding.EncodeToString([]byte(strArgs[0])), nil
-		}
-	case "base64_decode":
-		if len(strArgs) >= 1 {
-			decoded, err := base64.StdEncoding.DecodeString(strArgs[0])
-			if err != nil {
-				return "", nil
-			}
-			return string(decoded), nil
-		}
-	case "url_encode":
-		if len(strArgs) >= 1 {
-			return callFunc("url_encode", strArgs[0]), nil
-		}
-	case "url_decode":
-		if len(strArgs) >= 1 {
-			return callFunc("url_decode", strArgs[0]), nil
-		}
-	case "hex_encode":
-		if len(strArgs) >= 1 {
-			return callFunc("hex_encode", strArgs[0]), nil
-		}
-	case "rand_text_alpha":
-		return randString(8), nil
-	case "rand_text_alphanumeric":
-		return randString(12), nil
-	case "rand_base":
-		n := 8
-		if len(args) > 0 {
-			if f, ok := args[0].(float64); ok {
-				n = int(f)
-			}
-		}
-		return randString(n), nil
-	case "regex":
-		if len(strArgs) >= 2 {
-			re, err := regexp.Compile(strArgs[0])
-			if err != nil {
-				return false, nil
-			}
-			return re.MatchString(strArgs[1]), nil
-		}
-	}
-	return nil, nil
 }

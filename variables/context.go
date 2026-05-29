@@ -1,4 +1,4 @@
-package nuclei
+package variables
 
 import (
 	"crypto/md5"

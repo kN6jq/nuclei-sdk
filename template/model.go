@@ -1,30 +1,17 @@
-package nuclei
+package template
 
 import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath"
-	"regexp"
-	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/kN6jq/nuclei-sdk/extractor"
+	"github.com/kN6jq/nuclei-sdk/http"
+	"github.com/kN6jq/nuclei-sdk/matcher"
+	"github.com/kN6jq/nuclei-sdk/variables"
 )
-
-// Template represents a nuclei-compatible HTTP template.
-type Template struct {
-	Id        string            `yaml:"id"`
-	Info      Info              `yaml:"info"`
-	Variables map[string]string `yaml:"variables,omitempty"`
-	Flow      string            `yaml:"flow,omitempty"`
-	HTTP      []*Request        `yaml:"http,omitempty"`
-
-	randStr  string
-	compiled bool
-	flowTree *flowNode
-}
 
 // Info holds template metadata.
 type Info struct {
@@ -44,6 +31,46 @@ type Classification struct {
 	CVSSMetrics string  `yaml:"cvss-metrics,omitempty"`
 	CVSSScore   float64 `yaml:"cvss-score,omitempty"`
 	CPE         string  `yaml:"cpe,omitempty"`
+}
+
+// Template represents a nuclei-compatible HTTP template.
+type Template struct {
+	Id        string            `yaml:"id"`
+	Info      Info              `yaml:"info"`
+	Variables map[string]string `yaml:"variables,omitempty"`
+	Flow      string            `yaml:"flow,omitempty"`
+	HTTP      []*Request        `yaml:"http,omitempty"`
+
+	randStr    string
+	compiled   bool
+	flowTree   *flowNode
+	respData   *http.ResponseData
+	allResp    map[int]*http.ResponseData
+	dynValues  map[string][]string
+}
+
+// Request represents a single http request block in a nuclei template.
+type Request struct {
+	// Structured mode
+	Method  string            `yaml:"method,omitempty"`
+	Path    []string          `yaml:"path,omitempty"`
+	Headers map[string]string `yaml:"headers,omitempty"`
+	Body    string            `yaml:"body,omitempty"`
+
+	// Raw mode
+	Raw []string `yaml:"raw,omitempty"`
+
+	// Options
+	SelfContained    bool `yaml:"self-contained,omitempty"`
+	HostRedirects    bool `yaml:"host-redirects,omitempty"`
+	MaxRedirects     int  `yaml:"max-redirects,omitempty"`
+	StopAtFirstMatch bool `yaml:"stop-at-first-match,omitempty"`
+	CookieReuse      bool `yaml:"cookie-reuse,omitempty"`
+
+	// Operators
+	MatchersCondition string            `yaml:"matchers-condition,omitempty"`
+	Matchers          []*matcher.Matcher `yaml:"matchers,omitempty"`
+	Extractors        []*extractor.Extractor `yaml:"extractors,omitempty"`
 }
 
 // Result holds the execution result of a template against a target.
@@ -82,12 +109,12 @@ func (t *Template) Compile() error {
 	// Compile matchers and extractors
 	for _, req := range t.HTTP {
 		for _, m := range req.Matchers {
-			if err := m.compile(); err != nil {
+			if err := m.Compile(); err != nil {
 				return fmt.Errorf("matcher compile error in %s: %w", t.Id, err)
 			}
 		}
 		for _, e := range req.Extractors {
-			if err := e.compile(); err != nil {
+			if err := e.Compile(); err != nil {
 				return fmt.Errorf("extractor compile error in %s: %w", t.Id, err)
 			}
 		}
@@ -106,6 +133,12 @@ func (t *Template) Compile() error {
 	return nil
 }
 
+func randString(n int) string {
+	b := make([]byte, n)
+	rand.Read(b)
+	return hex.EncodeToString(b)[:n]
+}
+
 // Execute runs the template against a target URL.
 func (t *Template) Execute(targetURL string) (*Result, error) {
 	return t.ExecuteWithClient(targetURL, nil)
@@ -120,7 +153,7 @@ func (t *Template) ExecuteWithClient(targetURL string, _ interface{}) (*Result, 
 	}
 
 	targetURL = resolveTargetURL(targetURL)
-	vars := BuildVariableContext(targetURL, t.Variables, t.randStr)
+	vars := variables.BuildVariableContext(targetURL, t.Variables, t.randStr)
 
 	// Flow-based execution
 	if t.flowTree != nil {
@@ -156,85 +189,4 @@ func (t *Template) populateResultMeta(r *Result) {
 	r.TemplateID = t.Id
 	r.TemplateName = t.Info.Name
 	r.Severity = t.Info.Severity
-}
-
-// LoadFromDir loads all .yaml/.yml templates from a directory (recursive).
-func LoadFromDir(dir string) ([]*Template, error) {
-	var templates []*Template
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil
-		}
-		name := strings.ToLower(d.Name())
-		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
-			return nil
-		}
-
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			return nil
-		}
-
-		tmpl, err := Parse(raw)
-		if err != nil {
-			return nil
-		}
-		if err := tmpl.Compile(); err != nil {
-			return nil
-		}
-		templates = append(templates, tmpl)
-		return nil
-	})
-	return templates, err
-}
-
-// LoadFromFS loads all .yaml/.yml templates from an fs.FS.
-func LoadFromFS(fsys fs.FS, root string) ([]*Template, error) {
-	var templates []*Template
-	err := fs.WalkDir(fsys, root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil
-		}
-		name := strings.ToLower(d.Name())
-		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
-			return nil
-		}
-
-		raw, err := fs.ReadFile(fsys, path)
-		if err != nil {
-			return nil
-		}
-
-		tmpl, err := Parse(raw)
-		if err != nil {
-			return nil
-		}
-		if err := tmpl.Compile(); err != nil {
-			return nil
-		}
-		templates = append(templates, tmpl)
-		return nil
-	})
-	return templates, err
-}
-
-// --- Matcher compile ---
-
-func (m *Matcher) compile() error {
-	for _, pattern := range m.Regex {
-		re, err := regexp.Compile(pattern)
-		if err != nil {
-			return fmt.Errorf("regex compile %q: %w", pattern, err)
-		}
-		m.regexCompiled = append(m.regexCompiled, re)
-	}
-	return nil
-}
-
-// --- Utility ---
-
-func randString(n int) string {
-	b := make([]byte, n)
-	rand.Read(b)
-	return hex.EncodeToString(b)[:n]
 }
