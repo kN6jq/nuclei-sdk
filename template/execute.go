@@ -160,6 +160,10 @@ func executeRequestBlock(req *Request, target string, vars map[string]string) (*
 	allResponses := make(map[int]*ResponseData)
 	dynamicValues := make(map[string][]string)
 
+	// Track last request info for result population
+	var lastReqMethod, lastReqURL, lastReqBody string
+	var lastReqHeaders map[string]string
+
 	// Cookie jar for cookie-reuse
 	var jar stdhttp.CookieJar
 	if req.CookieReuse {
@@ -184,6 +188,10 @@ func executeRequestBlock(req *Request, target string, vars map[string]string) (*
 			}
 
 			reqURL := buildRawHTTPURL(target, rawPath)
+			lastReqMethod = method
+			lastReqURL = reqURL
+			lastReqHeaders = headers
+			lastReqBody = body
 
 			ctxTimeout := defaultTimeout
 			if timeoutOverride > 0 {
@@ -221,6 +229,11 @@ func executeRequestBlock(req *Request, target string, vars map[string]string) (*
 			if method == "" {
 				method = "GET"
 			}
+
+			lastReqMethod = method
+			lastReqURL = reqURL
+			lastReqHeaders = req.Headers
+			lastReqBody = body
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 			defer cancel()
@@ -274,12 +287,20 @@ func executeRequestBlock(req *Request, target string, vars map[string]string) (*
 
 	matched := matcher.EvaluateMatchers(req.Matchers, req.MatchersCondition, currentResp, allResponses, dynamicValues)
 
-	return &Result{
+	result := &Result{
 		Matched:       matched,
 		Extracts:      make(map[string][]string),
 		DynamicValues: dynamicValues,
 		PayloadValues: make(map[string]string),
-	}, nil
+	}
+
+	// Populate Request and Response if matched
+	if matched {
+		result.Request = formatRequest(lastReqMethod, lastReqURL, lastReqHeaders, lastReqBody)
+		result.Response = formatResponse(currentResp)
+	}
+
+	return result, nil
 }
 
 func buildHTTPClient(req *Request) *stdhttp.Client {
@@ -327,4 +348,39 @@ func resolveTargetURL(target string) string {
 		return target
 	}
 	return "http://" + target
+}
+
+// formatRequest formats an HTTP request into a string representation.
+func formatRequest(method, url string, headers map[string]string, body string) string {
+	var sb strings.Builder
+	sb.WriteString(method)
+	sb.WriteString(" ")
+	sb.WriteString(url)
+	sb.WriteString(" HTTP/1.1\r\n")
+	for k, v := range headers {
+		sb.WriteString(k)
+		sb.WriteString(": ")
+		sb.WriteString(v)
+		sb.WriteString("\r\n")
+	}
+	sb.WriteString("\r\n")
+	if body != "" {
+		sb.WriteString(body)
+	}
+	return sb.String()
+}
+
+// formatResponse formats a ResponseData into a string representation.
+func formatResponse(resp *ResponseData) string {
+	if resp == nil {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("HTTP/1.1 ")
+	sb.WriteString(strconv.Itoa(resp.StatusCode))
+	sb.WriteString("\r\n")
+	sb.WriteString(resp.Headers)
+	sb.WriteString("\r\n\r\n")
+	sb.WriteString(resp.Body)
+	return sb.String()
 }

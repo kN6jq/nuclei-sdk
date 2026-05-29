@@ -83,6 +83,10 @@ type Result struct {
 	DynamicValues map[string][]string
 	PayloadValues map[string]string
 	Data          map[string]interface{}
+	// Request holds the formatted HTTP request string
+	Request string
+	// Response holds the formatted HTTP response string
+	Response string
 }
 
 // Parse unmarshals YAML data into a Template.
