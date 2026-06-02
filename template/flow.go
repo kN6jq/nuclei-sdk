@@ -164,7 +164,7 @@ func (p *flowParser) readNumber() int {
 
 // evaluateFlow executes requests according to the flow tree.
 // AND: both must match. OR: either must match. Short-circuit evaluation.
-func evaluateFlow(node *flowNode, requests []*Request, target string, vars map[string]string) (*Result, error) {
+func evaluateFlow(node *flowNode, requests []*Request, target string, vars map[string]string, ec *ExecutionContext) (*Result, error) {
 	if node == nil {
 		return nil, nil
 	}
@@ -175,14 +175,14 @@ func evaluateFlow(node *flowNode, requests []*Request, target string, vars map[s
 			return nil, fmt.Errorf("flow references request %d but only %d requests exist", node.index, len(requests))
 		}
 		req := requests[node.index-1]
-		return executeRequestBlock(req, target, vars)
+		return executeRequestBlock(req, target, vars, ec)
 
 	case "and":
-		left, err := evaluateFlow(node.left, requests, target, vars)
+		left, err := evaluateFlow(node.left, requests, target, vars, ec)
 		if err != nil || !left.Matched {
 			return &Result{Matched: false}, err
 		}
-		right, err := evaluateFlow(node.right, requests, target, vars)
+		right, err := evaluateFlow(node.right, requests, target, vars, ec)
 		if err != nil {
 			return &Result{Matched: false}, err
 		}
@@ -194,11 +194,11 @@ func evaluateFlow(node *flowNode, requests []*Request, target string, vars map[s
 		}, nil
 
 	case "or":
-		left, err := evaluateFlow(node.left, requests, target, vars)
+		left, err := evaluateFlow(node.left, requests, target, vars, ec)
 		if err == nil && left.Matched {
 			return left, nil
 		}
-		right, err := evaluateFlow(node.right, requests, target, vars)
+		right, err := evaluateFlow(node.right, requests, target, vars, ec)
 		if err != nil {
 			return &Result{Matched: false}, err
 		}

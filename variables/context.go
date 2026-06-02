@@ -16,10 +16,13 @@ var funcPattern = regexp.MustCompile(`\{\{(\w+)\(([^)]*)\)\}\}`)
 
 // BuildVariableContext generates the variable substitution map from target URL,
 // template variables, and the fixed random string.
-func BuildVariableContext(targetURL string, tmplVars map[string]string, randStr string) map[string]string {
+// extraVars can provide optional overrides (e.g., interactsh-url from OOB client).
+func BuildVariableContext(targetURL string, tmplVars map[string]string, randStr string, extraVars ...map[string]string) map[string]string {
 	parsed, err := url.Parse(targetURL)
 	if err != nil {
-		return map[string]string{"BaseURL": targetURL, "randstr": randStr}
+		vars := map[string]string{"BaseURL": targetURL, "randstr": randStr, "interactsh-url": "interactsh.placeholder"}
+		applyExtras(vars, extraVars...)
+		return vars
 	}
 
 	domain := parsed.Hostname()
@@ -49,7 +52,18 @@ func BuildVariableContext(targetURL string, tmplVars map[string]string, randStr 
 		vars[k] = v
 	}
 
+	applyExtras(vars, extraVars...)
+
 	return vars
+}
+
+// applyExtras merges extra variable maps into the main map, overriding existing keys.
+func applyExtras(vars map[string]string, extraVars ...map[string]string) {
+	for _, extra := range extraVars {
+		for k, v := range extra {
+			vars[k] = v
+		}
+	}
 }
 
 // Substitute replaces all {{key}} patterns in the input string.

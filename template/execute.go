@@ -152,7 +152,7 @@ func buildRawHTTPURL(baseURL, rawPath string) string {
 
 // executeRequestBlock executes all requests in a Request block against a target.
 // Returns the final result (matched or not) and any dynamic values extracted.
-func executeRequestBlock(req *Request, target string, vars map[string]string) (*Result, error) {
+func executeRequestBlock(req *Request, target string, vars map[string]string, ec *ExecutionContext) (*Result, error) {
 	// Build HTTP client with appropriate settings
 	client := buildHTTPClient(req)
 
@@ -182,6 +182,12 @@ func executeRequestBlock(req *Request, target string, vars map[string]string) (*
 				}
 			}
 			raw = variables.Substitute(raw, vars)
+
+			// Replace interactsh markers in raw request and track URLs
+			if ec != nil {
+				raw, ec.InteractshURLs = replaceInteractshMarkers(raw, ec.InteractshURLs)
+			}
+
 			method, rawPath, headers, body, timeoutOverride, err := parseRawRequest(raw, target)
 			if err != nil {
 				continue
@@ -222,9 +228,21 @@ func executeRequestBlock(req *Request, target string, vars map[string]string) (*
 		// Structured request mode
 		for i, path := range req.Path {
 			path = variables.Substitute(path, vars)
+
+			// Replace interactsh markers in path and track URLs
+			if ec != nil {
+				path, ec.InteractshURLs = replaceInteractshMarkers(path, ec.InteractshURLs)
+			}
+
 			reqURL := buildRawHTTPURL(target, path)
 
 			body := variables.Substitute(req.Body, vars)
+
+			// Replace interactsh markers in body
+			if ec != nil && body != "" {
+				body, ec.InteractshURLs = replaceInteractshMarkers(body, ec.InteractshURLs)
+			}
+
 			method := req.Method
 			if method == "" {
 				method = "GET"
@@ -301,6 +319,23 @@ func executeRequestBlock(req *Request, target string, vars map[string]string) (*
 	}
 
 	return result, nil
+}
+
+// replaceInteractshMarkers replaces interactsh URL markers with their
+// variable values from vars map. Returns modified string and accumulated URL list.
+func replaceInteractshMarkers(input string, urls []string) (string, []string) {
+	// The markers have already been substituted by variables.Substitute(),
+	// so actual URLs will be in the string. We track them by detecting the
+	// interactsh URL pattern (subdomain.oast.pro, etc.)
+	// Extract any interactsh URLs that were injected via variable substitution
+	re := regexp.MustCompile(`([a-z0-9]{10,33}\.[a-z0-9-]+\.[a-z]{2,})`)
+	matches := re.FindAllString(input, -1)
+	for _, m := range matches {
+		if strings.Contains(m, "oast.") || strings.Contains(m, "interact.") {
+			urls = append(urls, m)
+		}
+	}
+	return input, urls
 }
 
 func buildHTTPClient(req *Request) *stdhttp.Client {

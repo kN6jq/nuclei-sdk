@@ -9,9 +9,25 @@ import (
 
 	"github.com/kN6jq/nuclei-sdk/extractor"
 	"github.com/kN6jq/nuclei-sdk/http"
+	"github.com/kN6jq/nuclei-sdk/interactsh"
 	"github.com/kN6jq/nuclei-sdk/matcher"
 	"github.com/kN6jq/nuclei-sdk/variables"
 )
+
+// ExecuteOptions holds optional execution context for template execution.
+type ExecuteOptions struct {
+	// InteractshClient is an optional OOB client for interactsh URL generation
+	// and interaction tracking. When set, {{interactsh-url}} markers in
+	// template requests are replaced with real URLs.
+	InteractshClient *interactsh.Client
+}
+
+// ExecutionContext holds per-execution runtime state that needs to survive
+// across multiple request blocks within a single Execute call.
+type ExecutionContext struct {
+	// InteractshURLs tracks all interactsh URLs generated during this execution.
+	InteractshURLs []string
+}
 
 // Info holds template metadata.
 type Info struct {
@@ -145,11 +161,17 @@ func randString(n int) string {
 
 // Execute runs the template against a target URL.
 func (t *Template) Execute(targetURL string) (*Result, error) {
-	return t.ExecuteWithClient(targetURL, nil)
+	return t.ExecuteWithOptions(targetURL, nil)
 }
 
 // ExecuteWithClient runs the template with an optional custom HTTP client.
 func (t *Template) ExecuteWithClient(targetURL string, _ interface{}) (*Result, error) {
+	return t.ExecuteWithOptions(targetURL, nil)
+}
+
+// ExecuteWithOptions runs the template with optional execution options,
+// including an interactsh OOB client for blind vulnerability detection.
+func (t *Template) ExecuteWithOptions(targetURL string, opts *ExecuteOptions) (*Result, error) {
 	if !t.compiled {
 		if err := t.Compile(); err != nil {
 			return nil, err
@@ -157,28 +179,75 @@ func (t *Template) ExecuteWithClient(targetURL string, _ interface{}) (*Result, 
 	}
 
 	targetURL = resolveTargetURL(targetURL)
-	vars := variables.BuildVariableContext(targetURL, t.Variables, t.randStr)
+
+	// Prepare extra variables for interactsh
+	var extraVars map[string]string
+	var ec *ExecutionContext
+
+	if opts != nil && opts.InteractshClient != nil && opts.InteractshClient.IsInitialized() {
+		ec = &ExecutionContext{}
+
+		// Check if any request uses interactsh markers
+		usesInteractsh := t.usesInteractshMarkers()
+
+		if usesInteractsh {
+			// Generate interactsh URL and set in vars
+			url, err := opts.InteractshClient.URL()
+			if err == nil {
+				extraVars = map[string]string{
+					"interactsh-url": url,
+				}
+				ec.InteractshURLs = append(ec.InteractshURLs, url)
+			}
+		}
+	}
+
+	vars := variables.BuildVariableContext(targetURL, t.Variables, t.randStr, extraVars)
 
 	// Flow-based execution
 	if t.flowTree != nil {
-		result, err := evaluateFlow(t.flowTree, t.HTTP, targetURL, vars)
+		result, err := evaluateFlow(t.flowTree, t.HTTP, targetURL, vars, ec)
 		if err != nil {
 			return nil, err
 		}
 		t.populateResultMeta(result)
+
+		// Track with interactsh client if URLs were generated
+		if ec != nil && len(ec.InteractshURLs) > 0 && opts != nil && opts.InteractshClient != nil {
+			t.trackInteractsh(opts.InteractshClient, ec.InteractshURLs, targetURL, result)
+		}
+
 		return result, nil
 	}
 
 	// Default sequential execution: try each request block
 	for _, req := range t.HTTP {
-		result, err := executeRequestBlock(req, targetURL, vars)
+		result, err := executeRequestBlock(req, targetURL, vars, ec)
 		if err != nil {
 			continue
 		}
 		if result.Matched {
 			t.populateResultMeta(result)
+
+			// Track with interactsh client if URLs were generated
+			if ec != nil && len(ec.InteractshURLs) > 0 && opts != nil && opts.InteractshClient != nil {
+				t.trackInteractsh(opts.InteractshClient, ec.InteractshURLs, targetURL, result)
+			}
+
 			return result, nil
 		}
+	}
+
+	// Even if no HTTP match, track for OOB-only templates (blind vulnerabilities)
+	if ec != nil && len(ec.InteractshURLs) > 0 && opts != nil && opts.InteractshClient != nil {
+		result := &Result{
+			Matched:      false,
+			TemplateID:   t.Id,
+			TemplateName: t.Info.Name,
+			Severity:     t.Info.Severity,
+		}
+		t.trackInteractsh(opts.InteractshClient, ec.InteractshURLs, targetURL, result)
+		return result, nil
 	}
 
 	return &Result{
@@ -187,6 +256,68 @@ func (t *Template) ExecuteWithClient(targetURL string, _ interface{}) (*Result, 
 		TemplateName: t.Info.Name,
 		Severity:     t.Info.Severity,
 	}, nil
+}
+
+// usesInteractshMarkers checks if any request in the template contains interactsh URL markers.
+func (t *Template) usesInteractshMarkers() bool {
+	for _, req := range t.HTTP {
+		for _, raw := range req.Raw {
+			if interactsh.HasMarkers(raw) {
+				return true
+			}
+		}
+		for _, path := range req.Path {
+			if interactsh.HasMarkers(path) {
+				return true
+			}
+		}
+		if interactsh.HasMarkers(req.Body) {
+			return true
+		}
+		for _, v := range req.Headers {
+			if interactsh.HasMarkers(v) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// trackInteractsh registers the executed template with the interactsh client
+// so that incoming OOB interactions can be matched against its matchers.
+func (t *Template) trackInteractsh(client *interactsh.Client, urls []string, target string, result *Result) {
+	if client == nil || !client.IsInitialized() {
+		return
+	}
+
+	// Collect all matchers from all request blocks
+	var allMatchers []*matcher.Matcher
+	var matchersCond string
+	for _, req := range t.HTTP {
+		allMatchers = append(allMatchers, req.Matchers...)
+		if req.MatchersCondition != "" {
+			matchersCond = req.MatchersCondition
+		}
+	}
+
+	// Check if any matchers are interactsh-specific
+	if !interactsh.HasMatchers(allMatchers) && len(allMatchers) > 0 {
+		// If there are matchers but none are interactsh-specific,
+		// still track for confirmation-based OOB (interaction arrival = match)
+	}
+
+	for _, url := range urls {
+		entry := &interactsh.TrackedEntry{
+			TemplateID:   t.Id,
+			TemplateName: t.Info.Name,
+			Severity:     t.Info.Severity,
+			Target:       target,
+			Matchers:     allMatchers,
+			MatchersCond: matchersCond,
+			URL:          url,
+		}
+		client.Track(entry)
+	}
 }
 
 func (t *Template) populateResultMeta(r *Result) {
