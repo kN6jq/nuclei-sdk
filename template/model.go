@@ -41,6 +41,34 @@ type Info struct {
 	Classification *Classification   `yaml:"classification,omitempty"`
 }
 
+// UnmarshalYAML implements custom YAML unmarshaling for Info.
+// Handles scalar string form for Reference (e.g. `reference: https://...`).
+func (i *Info) UnmarshalYAML(value *yaml.Node) error {
+	type rawInfo struct {
+		Name           string            `yaml:"name"`
+		Author         string            `yaml:"author,omitempty"`
+		Severity       string            `yaml:"severity,omitempty"`
+		Description    string            `yaml:"description,omitempty"`
+		Tags           string            `yaml:"tags,omitempty"`
+		Reference      interface{}       `yaml:"reference,omitempty"`
+		Metadata       map[string]string `yaml:"metadata,omitempty"`
+		Classification *Classification   `yaml:"classification,omitempty"`
+	}
+	var raw rawInfo
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+	i.Name = raw.Name
+	i.Author = raw.Author
+	i.Severity = raw.Severity
+	i.Description = raw.Description
+	i.Tags = raw.Tags
+	i.Reference = ifaceToStringSlice(raw.Reference)
+	i.Metadata = raw.Metadata
+	i.Classification = raw.Classification
+	return nil
+}
+
 // Classification holds CVE/CVSS metadata.
 type Classification struct {
 	CWEID       string  `yaml:"cwe-id,omitempty"`
@@ -87,6 +115,74 @@ type Request struct {
 	MatchersCondition string            `yaml:"matchers-condition,omitempty"`
 	Matchers          []*matcher.Matcher `yaml:"matchers,omitempty"`
 	Extractors        []*extractor.Extractor `yaml:"extractors,omitempty"`
+}
+
+// UnmarshalYAML implements custom YAML unmarshaling for Request.
+// Handles scalar string forms for Path and Raw fields.
+func (r *Request) UnmarshalYAML(value *yaml.Node) error {
+	type rawRequest struct {
+		Method           string                      `yaml:"method,omitempty"`
+		Path             interface{}                 `yaml:"path,omitempty"`
+		Headers          map[string]string           `yaml:"headers,omitempty"`
+		Body             string                      `yaml:"body,omitempty"`
+		Raw              interface{}                 `yaml:"raw,omitempty"`
+		SelfContained    bool                        `yaml:"self-contained,omitempty"`
+		HostRedirects    bool                        `yaml:"host-redirects,omitempty"`
+		MaxRedirects     int                         `yaml:"max-redirects,omitempty"`
+		StopAtFirstMatch bool                        `yaml:"stop-at-first-match,omitempty"`
+		CookieReuse      bool                        `yaml:"cookie-reuse,omitempty"`
+		MatchersCondition string                     `yaml:"matchers-condition,omitempty"`
+		Matchers         []*matcher.Matcher          `yaml:"matchers,omitempty"`
+		Extractors       []*extractor.Extractor      `yaml:"extractors,omitempty"`
+	}
+	var raw rawRequest
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+	r.Method = raw.Method
+	r.Path = ifaceToStringSlice(raw.Path)
+	r.Headers = raw.Headers
+	r.Body = raw.Body
+	r.Raw = ifaceToStringSlice(raw.Raw)
+	r.SelfContained = raw.SelfContained
+	r.HostRedirects = raw.HostRedirects
+	r.MaxRedirects = raw.MaxRedirects
+	r.StopAtFirstMatch = raw.StopAtFirstMatch
+	r.CookieReuse = raw.CookieReuse
+	r.MatchersCondition = raw.MatchersCondition
+	r.Matchers = raw.Matchers
+	r.Extractors = raw.Extractors
+	return nil
+}
+
+// ifaceToStringSlice converts a YAML-decoded interface{} to []string.
+func ifaceToStringSlice(v interface{}) []string {
+	if v == nil {
+		return nil
+	}
+	switch val := v.(type) {
+	case string:
+		if val == "" {
+			return nil
+		}
+		return []string{val}
+	case []interface{}:
+		result := make([]string, 0, len(val))
+		for _, item := range val {
+			result = append(result, fmt.Sprintf("%v", item))
+		}
+		if len(result) == 0 {
+			return nil
+		}
+		return result
+	case []string:
+		if len(val) == 0 {
+			return nil
+		}
+		return val
+	default:
+		return []string{fmt.Sprintf("%v", v)}
+	}
 }
 
 // Result holds the execution result of a template against a target.

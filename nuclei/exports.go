@@ -17,6 +17,7 @@ type Classification = tpl.Classification
 type ResponseData = tpl.ResponseData
 type Request = tpl.Request
 type ExecuteOptions = tpl.ExecuteOptions
+type ValidationResult = tpl.ValidationResult
 
 // Types re-exported from matcher package
 type Matcher = matcher.Matcher
