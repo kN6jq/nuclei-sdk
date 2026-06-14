@@ -317,11 +317,13 @@ func (t *Template) ExecuteWithOptions(targetURL string, opts *ExecuteOptions) (*
 	}
 
 	// Default sequential execution: try each request block
+	var lastResult *Result
 	for _, req := range t.HTTP {
 		result, err := executeRequestBlock(req, targetURL, vars, ec)
 		if err != nil {
 			continue
 		}
+		lastResult = result
 		if result.Matched {
 			t.populateResultMeta(result)
 
@@ -344,6 +346,13 @@ func (t *Template) ExecuteWithOptions(targetURL string, opts *ExecuteOptions) (*
 		}
 		t.trackInteractsh(opts.InteractshClient, ec.InteractshURLs, targetURL, result)
 		return result, nil
+	}
+
+	// No match: return the last executed result so callers can still inspect
+	// the actual request/response (--debug-req/--debug-resp), even without a match.
+	if lastResult != nil {
+		t.populateResultMeta(lastResult)
+		return lastResult, nil
 	}
 
 	return &Result{
