@@ -8,6 +8,8 @@ import (
 	"io"
 	stdhttp "net/http"
 	"net/http/cookiejar"
+	"net/http/httputil"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -144,10 +146,21 @@ func parseRawRequest(raw, baseURL string) (method, reqPath string, headers map[s
 
 // buildRawHTTPURL combines baseURL with the path from raw request.
 func buildRawHTTPURL(baseURL, rawPath string) string {
+	var u string
 	if strings.HasPrefix(rawPath, "http://") || strings.HasPrefix(rawPath, "https://") {
-		return rawPath
+		u = rawPath
+	} else {
+		u = strings.TrimRight(baseURL, "/") + "/" + strings.TrimLeft(rawPath, "/")
 	}
-	return strings.TrimRight(baseURL, "/") + rawPath
+	// 归一化路径中的重复斜线（如 BaseURL 带尾斜线 + path 带前导斜线产生的 //index.php），
+	// 与 nuclei 的 URL 拼接行为一致；保留 scheme 的 ://。
+	if p, err := url.Parse(u); err == nil {
+		for strings.HasPrefix(p.Path, "//") {
+			p.Path = p.Path[1:]
+		}
+		return p.String()
+	}
+	return u
 }
 
 // executeRequestBlock executes all requests in a Request block against a target.
@@ -163,6 +176,7 @@ func executeRequestBlock(req *Request, target string, vars map[string]string, ec
 	// Track last request info for result population
 	var lastReqMethod, lastReqURL, lastReqBody string
 	var lastReqHeaders map[string]string
+	var lastDumpedReq []byte
 
 	// Cookie jar for cookie-reuse
 	var jar stdhttp.CookieJar
@@ -212,6 +226,10 @@ func executeRequestBlock(req *Request, target string, vars map[string]string, ec
 			}
 			for k, v := range headers {
 				httpReq.Header.Set(k, v)
+			}
+			applyDefaultHeaders(httpReq)
+			if dumped, e := httputil.DumpRequestOut(httpReq, true); e == nil {
+				lastDumpedReq = dumped
 			}
 
 			resp, err := executeRequest(client, httpReq)
@@ -267,6 +285,10 @@ func executeRequestBlock(req *Request, target string, vars map[string]string, ec
 			for k, v := range req.Headers {
 				httpReq.Header.Set(k, variables.Substitute(v, vars))
 			}
+			applyDefaultHeaders(httpReq)
+			if dumped, e := httputil.DumpRequestOut(httpReq, true); e == nil {
+				lastDumpedReq = dumped
+			}
 
 			resp, err := executeRequest(client, httpReq)
 			if err != nil {
@@ -313,8 +335,14 @@ func executeRequestBlock(req *Request, target string, vars map[string]string, ec
 	}
 
 	// Populate Request and Response always (--debug-req / --debug-resp behavior:
-	// expose the actual request/response even when the template does not match)
-	result.Request = formatRequest(lastReqMethod, lastReqURL, lastReqHeaders, lastReqBody)
+	// expose the actual request/response even when the template does not match).
+	// Request 用 httputil.DumpRequestOut dump 真实上线请求（含 Host/User-Agent/Accept
+	// 等所有头、路径式请求行），与 nuclei --debug-req 输出一致；dump 失败时回退到格式化。
+	if len(lastDumpedReq) > 0 {
+		result.Request = string(lastDumpedReq)
+	} else {
+		result.Request = formatRequest(lastReqMethod, lastReqURL, lastReqHeaders, lastReqBody)
+	}
 	result.Response = formatResponse(currentResp)
 
 	return result, nil
@@ -382,6 +410,24 @@ func resolveTargetURL(target string) string {
 		return target
 	}
 	return "http://" + target
+}
+
+// defaultUserAgent 与 nuclei 默认 UA 保持一致，便于 --debug-req 输出可比对。
+const defaultUserAgent = "Mozilla/5.0 (Kubuntu; Linux i686) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+
+// applyDefaultHeaders 为请求补全 nuclei 默认请求头（仅当模板未指定时），使 DumpRequestOut
+// 输出与 nuclei --debug-req 一致（Host 与 Accept-Encoding 由 http transport 自动补全）。
+func applyDefaultHeaders(r *stdhttp.Request) {
+	if r.Header.Get("User-Agent") == "" {
+		r.Header.Set("User-Agent", defaultUserAgent)
+	}
+	if r.Header.Get("Accept") == "" {
+		r.Header.Set("Accept", "*/*")
+	}
+	if r.Header.Get("Accept-Language") == "" {
+		r.Header.Set("Accept-Language", "en")
+	}
+	r.Close = true // nuclei 默认 Connection: close
 }
 
 // formatRequest formats an HTTP request into a string representation.
