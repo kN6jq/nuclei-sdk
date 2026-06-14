@@ -312,11 +312,10 @@ func executeRequestBlock(req *Request, target string, vars map[string]string, ec
 		PayloadValues: make(map[string]string),
 	}
 
-	// Populate Request and Response if matched
-	if matched {
-		result.Request = formatRequest(lastReqMethod, lastReqURL, lastReqHeaders, lastReqBody)
-		result.Response = formatResponse(currentResp)
-	}
+	// Populate Request and Response always (--debug-req / --debug-resp behavior:
+	// expose the actual request/response even when the template does not match)
+	result.Request = formatRequest(lastReqMethod, lastReqURL, lastReqHeaders, lastReqBody)
+	result.Response = formatResponse(currentResp)
 
 	return result, nil
 }
