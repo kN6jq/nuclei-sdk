@@ -15,7 +15,9 @@ type ResponseData = http.ResponseData
 // Returns true if matched (respecting matchers-condition).
 func EvaluateMatchers(matchers []*Matcher, condition string, resp *ResponseData, allResponses map[int]*ResponseData, dynamicValues map[string][]string) bool {
 	if len(matchers) == 0 {
-		return false
+		// 无 matcher 视为匹配（对齐 nuclei 官方语义）：
+		// 纯 extractor 型模板（如指纹/技术识别）提取到数据即视为命中。
+		return true
 	}
 
 	if condition == "" {
