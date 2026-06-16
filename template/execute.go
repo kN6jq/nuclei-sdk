@@ -329,7 +329,7 @@ func executeRequestBlock(req *Request, target string, vars map[string]string, ec
 
 	result := &Result{
 		Matched:       matched,
-		Extracts:      make(map[string][]string),
+		Extracts:      dynamicValues,
 		DynamicValues: dynamicValues,
 		PayloadValues: make(map[string]string),
 	}
