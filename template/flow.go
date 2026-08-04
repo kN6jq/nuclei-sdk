@@ -180,14 +180,22 @@ func evaluateFlow(node *flowNode, requests []*Request, target string, vars map[s
 	case "and":
 		left, err := evaluateFlow(node.left, requests, target, vars, ec)
 		if err != nil || !left.Matched {
-			return &Result{Matched: false}, err
+			// left 未匹配或出错:直接返回 left(而非裸 Result),
+			// 保留 left 的 Request/Response,便于 --debug-req/--debug-resp 调试。
+			if left == nil {
+				return &Result{Matched: false}, err
+			}
+			return left, err
 		}
 		right, err := evaluateFlow(node.right, requests, target, vars, ec)
 		if err != nil {
-			return &Result{Matched: false}, err
+			// left 已匹配但 right 出错:返回 left,保留其 req/resp
+			return left, err
 		}
 		return &Result{
 			Matched:       left.Matched && right.Matched,
+			Request:       left.Request,
+			Response:      left.Response,
 			Extracts:      mergeMaps(left.Extracts, right.Extracts),
 			DynamicValues: mergeMaps(left.DynamicValues, right.DynamicValues),
 			PayloadValues: mergeStringMaps(left.PayloadValues, right.PayloadValues),
