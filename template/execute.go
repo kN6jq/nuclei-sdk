@@ -322,7 +322,18 @@ func executeRequestBlock(req *Request, target string, vars map[string]string, ec
 		currentResp = allResponses[maxIdx]
 	}
 	if currentResp == nil {
-		return &Result{Matched: false}, nil
+		// 请求完全失败(连接超时/拒接/DNS 失败/解析错误等):拿不到任何响应。
+		// 仍暴露尝试发送的请求,便于排查"为何没响应";
+		// Response 留空(确实没有响应可暴露)。
+		// TemplateID/Name/Severity 由调用方(model.go 顺序执行的 no-match fallthrough
+		// 或 flow 分支的 evaluateFlow 返回后)统一通过 populateResultMeta 补回。
+		req := ""
+		if len(lastDumpedReq) > 0 {
+			req = string(lastDumpedReq)
+		} else {
+			req = formatRequest(lastReqMethod, lastReqURL, lastReqHeaders, lastReqBody)
+		}
+		return &Result{Matched: false, Request: req}, nil
 	}
 
 	matched := matcher.EvaluateMatchers(req.Matchers, req.MatchersCondition, currentResp, allResponses, dynamicValues)
