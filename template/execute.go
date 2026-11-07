@@ -178,6 +178,24 @@ func executeRequestBlock(req *Request, target string, vars map[string]string, ec
 	var lastReqHeaders map[string]string
 	var lastDumpedReq []byte
 
+	// buildResult 基于当前请求/响应构造 Result。
+	// 闭包捕获外层跟踪变量, 调用点位于各请求处理完毕时, 反映的即当前请求。
+	buildResult := func(resp *ResponseData, matched bool) *Result {
+		result := &Result{
+			Matched:       matched,
+			Extracts:      dynamicValues,
+			DynamicValues: dynamicValues,
+			PayloadValues: make(map[string]string),
+		}
+		if len(lastDumpedReq) > 0 {
+			result.Request = string(lastDumpedReq)
+		} else {
+			result.Request = formatRequest(lastReqMethod, lastReqURL, lastReqHeaders, lastReqBody)
+		}
+		result.Response = formatResponse(resp)
+		return result
+	}
+
 	// Cookie jar for cookie-reuse
 	var jar stdhttp.CookieJar
 	if req.CookieReuse {
@@ -241,6 +259,12 @@ func executeRequestBlock(req *Request, target string, vars map[string]string, ec
 
 			// Run extractors
 			extractor.RunExtractors(req.Extractors, resp, allResponses, dynamicValues)
+
+			// 官方 nuclei 语义: 匹配器逐请求评估, 任一请求命中即模板命中。
+			// 多路径模板 (如先探测 /login 再探测 /) 不能只看最后一个响应。
+			if matcher.EvaluateMatchers(req.Matchers, req.MatchersCondition, resp, allResponses, dynamicValues) {
+				return buildResult(resp, true), nil
+			}
 		}
 	} else {
 		// Structured request mode
@@ -299,6 +323,11 @@ func executeRequestBlock(req *Request, target string, vars map[string]string, ec
 
 			// Run extractors
 			extractor.RunExtractors(req.Extractors, resp, allResponses, dynamicValues)
+
+			// 官方 nuclei 语义: 匹配器逐请求评估, 任一请求命中即模板命中
+			if matcher.EvaluateMatchers(req.Matchers, req.MatchersCondition, resp, allResponses, dynamicValues) {
+				return buildResult(resp, true), nil
+			}
 
 			// For single-response templates, use last response as "current"
 			if len(req.Path) == 1 {
