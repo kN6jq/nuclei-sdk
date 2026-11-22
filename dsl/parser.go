@@ -167,6 +167,37 @@ func (p *parser) parseString() (interface{}, error) {
 	var sb strings.Builder
 	for p.pos < len(p.input) {
 		ch := p.advance()
+		// 反斜杠转义：单引号/双引号字符串均支持 \\、\"、\'、\n、\r、\t。
+		// 修复前完全不处理转义，读到 \" 时把开引号当结束符，
+		// 导致 contains(body, "\"x\"") 的 needle 退化为单个反斜杠，
+		// 任何含反斜杠的响应体都会命中（模板误报根因）。
+		if ch == '\\' {
+			if p.pos >= len(p.input) {
+				// 尾部孤立反斜杠按字面量保留
+				sb.WriteRune(ch)
+				break
+			}
+			esc := p.advance()
+			switch esc {
+			case '\\':
+				sb.WriteRune('\\')
+			case '"':
+				sb.WriteRune('"')
+			case '\'':
+				sb.WriteRune('\'')
+			case 'n':
+				sb.WriteRune('\n')
+			case 'r':
+				sb.WriteRune('\r')
+			case 't':
+				sb.WriteRune('\t')
+			default:
+				// 未知转义序列保持原样，不改变其他 DSL 语义
+				sb.WriteRune(ch)
+				sb.WriteRune(esc)
+			}
+			continue
+		}
 		if ch == quote {
 			return sb.String(), nil
 		}
